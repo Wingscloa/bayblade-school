@@ -5,7 +5,6 @@ public class BeybladeController : MonoBehaviour
 {
     [Header("beyblade logic")]
     public float moveSpeed = 5f;
-    public float jumpForce = 7f;
     public float rotationSpeed = 500f;
     public float tiltAngle = 15f;
     public float airTiltAmount = 10f;
@@ -15,6 +14,7 @@ public class BeybladeController : MonoBehaviour
     private bool isGrounded;
 
     private float horizontalInput;
+    private float verticalInput;
 
     void Start()
     {
@@ -25,41 +25,41 @@ public class BeybladeController : MonoBehaviour
     [System.Obsolete]
     void Update()
     {
-        horizontalInput = Input.GetAxis("Horizontal");
+        horizontalInput = 0f;
+        verticalInput = 0f;
+
+        if (Input.GetKey(KeyCode.A)) horizontalInput = -1f;
+        if (Input.GetKey(KeyCode.D)) horizontalInput = 1f;
+
+        if (Input.GetKey(KeyCode.W)) verticalInput = 1f;
+        if (Input.GetKey(KeyCode.S)) verticalInput = -1f;
 
         HandleMovement();
-        HandleJump();
         ApplySpin();
     }
 
     [System.Obsolete]
     void HandleMovement()
     {
-        Vector3 velocity = rb.velocity; 
+        Vector3 velocity = rb.velocity;
         velocity.x = horizontalInput * moveSpeed;
+        velocity.z = verticalInput * moveSpeed;
         rb.velocity = velocity;
 
         rb.angularVelocity = new Vector3(0, -rotationSpeed * Time.deltaTime, 0);
 
-        float targetTilt = horizontalInput * -tiltAngle;
+        float tiltX = verticalInput * tiltAngle;
+        float tiltZ = horizontalInput * -tiltAngle;
+
         if (!isGrounded)
         {
-            targetTilt = Mathf.Sin(Time.time * 3f) * airTiltAmount;
+            tiltX = Mathf.Sin(Time.time * 3f) * airTiltAmount;
+            tiltZ = Mathf.Cos(Time.time * 3f) * airTiltAmount;
         }
 
-        Quaternion targetRotation = Quaternion.Euler(targetTilt, transform.rotation.eulerAngles.y, 0);
+        Quaternion targetRotation = Quaternion.Euler(tiltX, transform.rotation.eulerAngles.y, tiltZ);
         transform.rotation = Quaternion.Lerp(transform.rotation, targetRotation, Time.deltaTime * tiltSmoothness);
     }
-
-    void HandleJump()
-    {
-        if (Input.GetButtonDown("Jump") && isGrounded)
-        {
-            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
-            isGrounded = false;
-        }
-    }
-
     void ApplySpin()
     {
         transform.Rotate(Vector3.up * -rotationSpeed * Time.deltaTime);
@@ -70,6 +70,28 @@ public class BeybladeController : MonoBehaviour
         if (collision.gameObject.CompareTag("Ground"))
         {
             isGrounded = true;
+            return;
+        }
+
+        if (collision.gameObject.CompareTag("Beyblade"))
+        {
+            var otherCombat = collision.gameObject.GetComponent<BeybladeCombat>();
+            var selfCombat = GetComponent<BeybladeCombat>();
+
+            if (otherCombat != null && selfCombat != null)
+            {
+                if (Random.value > 0.5f && !otherCombat.IsInvulnerable())
+                {
+                    Vector3 knockback = collision.transform.position - transform.position;
+                    otherCombat.TakeDamage(Random.Range(5, 15), knockback);
+                }
+                else if (!selfCombat.IsInvulnerable())
+                {
+                    Vector3 knockback = transform.position - collision.transform.position;
+                    selfCombat.TakeDamage(Random.Range(5, 15), knockback);
+                }
+            }
         }
     }
+
 }
